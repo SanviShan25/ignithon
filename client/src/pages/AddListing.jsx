@@ -1,3 +1,4 @@
+// src/pages/AddListing.jsx
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -20,7 +21,8 @@ function waDigits(raw) {
 
 export default function AddListing() {
   const navigate = useNavigate();
-  const dtRef = useRef(null);
+  const readyRef = useRef(null);
+  const cookRef = useRef(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -28,6 +30,7 @@ export default function AddListing() {
     food_type: "VEG",
     portions: "",
     pincode: "",
+    cooking_time: toLocalInputValue(new Date()),   // NEW
     ready_until: toLocalInputValue(new Date()),
     tags: "",
     allergens: "",
@@ -54,6 +57,18 @@ export default function AddListing() {
     if (!form.donor_phone?.trim()) return "Please enter donor phone.";
     if (form.donor_phone && !/^[0-9+\-\s()]{7,}$/.test(form.donor_phone)) return "Enter a valid phone number.";
     if (form.donor_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.donor_email)) return "Enter a valid email.";
+
+    // ---- NEW: date/time checks ----
+    if (!form.cooking_time) return "Please set when the food was cooked.";
+    if (!form.ready_until) return "Please set 'Ready until' (pick-up window end).";
+
+    const now = new Date();
+    const cooked = new Date(form.cooking_time);
+    const ready = new Date(form.ready_until);
+
+    if (cooked.getTime() > now.getTime()) return "Cooking time cannot be in the future.";
+    if (ready.getTime() <= cooked.getTime())
+      return "'Ready until' must be later than the cooking time.";
     return "";
   };
 
@@ -72,6 +87,7 @@ export default function AddListing() {
       food_type: form.food_type,
       portions: Number(form.portions) || 0,
       pincode: String(form.pincode || "").trim(),
+      cooking_time: form.cooking_time,   // NEW
       ready_until: form.ready_until,
       tags: form.tags,
       allergens: form.allergens,
@@ -138,10 +154,46 @@ export default function AddListing() {
             </label>
           </div>
 
+          {/* NEW: Cooking time + Ready until in one row */}
           <div style={row2}>
             <label style={lbl}>
-              <span>Pincode</span>
-              <input name="pincode" value={form.pincode} onChange={handleChange} placeholder="e.g., 500055" style={inp} required />
+              <span>Cooked at</span>
+              <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <input
+                    ref={cookRef}
+                    type="datetime-local"
+                    name="cooking_time"
+                    value={form.cooking_time}
+                    onChange={handleChange}
+                    style={{ ...inp, paddingRight: 36, width: "100%" }}
+                    step="60"
+                    max={toLocalInputValue(new Date())}
+                  />
+                  <span
+                    onClick={() => (cookRef.current?.showPicker?.(), cookRef.current?.focus())}
+                    title="Open picker"
+                    style={{
+                      position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                      cursor: "pointer", fontSize: 18,
+                    }}
+                  >
+                    🕒
+                  </span>
+                </div>
+
+                <button type="button" style={btnGhost}
+                  onClick={() => setForm((f) => ({ ...f, cooking_time: toLocalInputValue(new Date()) }))}>
+                  Now
+                </button>
+                <button type="button" style={btnGhost}
+                  onClick={() => {
+                    const dt = new Date(); dt.setHours(dt.getHours() - 1);
+                    setForm((f) => ({ ...f, cooking_time: toLocalInputValue(dt) }));
+                  }}>
+                  -1 hr
+                </button>
+              </div>
             </label>
 
             <label style={lbl}>
@@ -149,17 +201,18 @@ export default function AddListing() {
               <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1 }}>
                   <input
-                    ref={dtRef}
+                    ref={readyRef}
                     type="datetime-local"
                     name="ready_until"
                     value={form.ready_until}
                     onChange={handleChange}
                     style={{ ...inp, paddingRight: 36, width: "100%" }}
                     step="60"
+                    min={form.cooking_time || toLocalInputValue(new Date())}
                   />
                   {/* Calendar icon */}
                   <span
-                    onClick={() => (dtRef.current?.showPicker?.(), dtRef.current?.focus())}
+                    onClick={() => (readyRef.current?.showPicker?.(), readyRef.current?.focus())}
                     title="Open picker"
                     style={{
                       position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
@@ -251,7 +304,9 @@ export default function AddListing() {
             onClick={() =>
               setForm({
                 title: "", description: "", food_type: "VEG", portions: "", pincode: "",
-                ready_until: toLocalInputValue(new Date()), tags: "", allergens: "", hygiene_ack: false,
+                cooking_time: toLocalInputValue(new Date()),
+                ready_until: toLocalInputValue(new Date()),
+                tags: "", allergens: "", hygiene_ack: false,
                 donor_name: "", donor_phone: "", donor_email: "", donor_address: "",
               })
             }
