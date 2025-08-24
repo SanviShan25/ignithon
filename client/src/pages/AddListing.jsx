@@ -21,16 +21,14 @@ function waDigits(raw) {
 
 export default function AddListing() {
   const navigate = useNavigate();
-  const readyRef = useRef(null);
-  const cookRef = useRef(null);
+  const dtRef = useRef(null);
 
   const [form, setForm] = useState({
     title: "",
     description: "",
     food_type: "VEG",
     portions: "",
-    pincode: "",
-    cooking_time: toLocalInputValue(new Date()),   // NEW
+    pincode: "", // listing location pincode
     ready_until: toLocalInputValue(new Date()),
     tags: "",
     allergens: "",
@@ -38,7 +36,7 @@ export default function AddListing() {
     donor_name: "",
     donor_phone: "",
     donor_email: "",
-    donor_address: "",
+    donor_pincode: "", // <-- address removed, donor_pincode added
   });
 
   const [msg, setMsg] = useState("");
@@ -46,29 +44,26 @@ export default function AddListing() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    // digits-only, max 6 for both pincodes
+    if (name === "pincode" || name === "donor_pincode") {
+      const digits = value.replace(/\D/g, "").slice(0, 6);
+      setForm((f) => ({ ...f, [name]: digits }));
+      return;
+    }
+
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   };
 
   const validate = () => {
     if (!form.title?.trim()) return "Please enter a title.";
     if (!form.portions || Number(form.portions) <= 0) return "Please enter portions (≥ 1).";
-    if (!form.pincode?.trim()) return "Please enter a pincode.";
+    if (!form.pincode || form.pincode.length !== 6) return "Please enter a valid 6-digit listing pincode.";
     if (!form.donor_name?.trim()) return "Please enter donor name.";
     if (!form.donor_phone?.trim()) return "Please enter donor phone.";
     if (form.donor_phone && !/^[0-9+\-\s()]{7,}$/.test(form.donor_phone)) return "Enter a valid phone number.";
     if (form.donor_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.donor_email)) return "Enter a valid email.";
-
-    // ---- NEW: date/time checks ----
-    if (!form.cooking_time) return "Please set when the food was cooked.";
-    if (!form.ready_until) return "Please set 'Ready until' (pick-up window end).";
-
-    const now = new Date();
-    const cooked = new Date(form.cooking_time);
-    const ready = new Date(form.ready_until);
-
-    if (cooked.getTime() > now.getTime()) return "Cooking time cannot be in the future.";
-    if (ready.getTime() <= cooked.getTime())
-      return "'Ready until' must be later than the cooking time.";
+    if (!form.donor_pincode || form.donor_pincode.length !== 6) return "Please enter a valid 6-digit donor pincode.";
     return "";
   };
 
@@ -83,11 +78,10 @@ export default function AddListing() {
     let newId = Date.now();
     const payload = {
       title: form.title.trim(),
-      description: form.description.trim(),
+      description: (form.description || "").trim(),
       food_type: form.food_type,
       portions: Number(form.portions) || 0,
       pincode: String(form.pincode || "").trim(),
-      cooking_time: form.cooking_time,   // NEW
       ready_until: form.ready_until,
       tags: form.tags,
       allergens: form.allergens,
@@ -96,7 +90,7 @@ export default function AddListing() {
         name: form.donor_name.trim(),
         phone: form.donor_phone.trim(),
         email: form.donor_email.trim(),
-        address: form.donor_address.trim(),
+        pincode: form.donor_pincode.trim(), // <-- address replaced by pincode
       },
     };
 
@@ -131,12 +125,26 @@ export default function AddListing() {
 
           <label style={lbl}>
             <span>Title</span>
-            <input name="title" value={form.title} onChange={handleChange} placeholder="e.g., Puri, Chhole, Rice + Dal" style={inp} required />
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="e.g., Puri, Chhole, Rice + Dal"
+              style={inp}
+              required
+            />
           </label>
 
           <label style={lbl}>
             <span>Description</span>
-            <textarea name="description" value={form.description} onChange={handleChange} placeholder="Short description…" rows={3} style={ta} />
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              placeholder="Short description…"
+              rows={3}
+              style={ta}
+            />
           </label>
 
           <div style={row2}>
@@ -150,50 +158,32 @@ export default function AddListing() {
 
             <label style={lbl}>
               <span>Portions</span>
-              <input type="number" name="portions" value={form.portions} onChange={handleChange} placeholder="e.g., 5" style={inp} min={1} required />
+              <input
+                type="number"
+                name="portions"
+                value={form.portions}
+                onChange={handleChange}
+                placeholder="e.g., 5"
+                style={inp}
+                min={1}
+                required
+              />
             </label>
           </div>
 
-          {/* NEW: Cooking time + Ready until in one row */}
           <div style={row2}>
             <label style={lbl}>
-              <span>Cooked at</span>
-              <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ position: "relative", flex: 1 }}>
-                  <input
-                    ref={cookRef}
-                    type="datetime-local"
-                    name="cooking_time"
-                    value={form.cooking_time}
-                    onChange={handleChange}
-                    style={{ ...inp, paddingRight: 36, width: "100%" }}
-                    step="60"
-                    max={toLocalInputValue(new Date())}
-                  />
-                  <span
-                    onClick={() => (cookRef.current?.showPicker?.(), cookRef.current?.focus())}
-                    title="Open picker"
-                    style={{
-                      position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                      cursor: "pointer", fontSize: 18,
-                    }}
-                  >
-                    🕒
-                  </span>
-                </div>
-
-                <button type="button" style={btnGhost}
-                  onClick={() => setForm((f) => ({ ...f, cooking_time: toLocalInputValue(new Date()) }))}>
-                  Now
-                </button>
-                <button type="button" style={btnGhost}
-                  onClick={() => {
-                    const dt = new Date(); dt.setHours(dt.getHours() - 1);
-                    setForm((f) => ({ ...f, cooking_time: toLocalInputValue(dt) }));
-                  }}>
-                  -1 hr
-                </button>
-              </div>
+              <span>Pincode</span>
+              <input
+                name="pincode"
+                value={form.pincode}
+                onChange={handleChange}
+                placeholder="e.g., 500055"
+                style={inp}
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
             </label>
 
             <label style={lbl}>
@@ -201,18 +191,17 @@ export default function AddListing() {
               <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1 }}>
                   <input
-                    ref={readyRef}
+                    ref={dtRef}
                     type="datetime-local"
                     name="ready_until"
                     value={form.ready_until}
                     onChange={handleChange}
                     style={{ ...inp, paddingRight: 36, width: "100%" }}
                     step="60"
-                    min={form.cooking_time || toLocalInputValue(new Date())}
                   />
                   {/* Calendar icon */}
                   <span
-                    onClick={() => (readyRef.current?.showPicker?.(), readyRef.current?.focus())}
+                    onClick={() => (dtRef.current?.showPicker?.(), dtRef.current?.focus())}
                     title="Open picker"
                     style={{
                       position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
@@ -223,15 +212,21 @@ export default function AddListing() {
                   </span>
                 </div>
 
-                <button type="button" style={btnGhost}
-                  onClick={() => setForm((f) => ({ ...f, ready_until: toLocalInputValue(new Date()) }))}>
+                <button
+                  type="button"
+                  style={btnGhost}
+                  onClick={() => setForm((f) => ({ ...f, ready_until: toLocalInputValue(new Date()) }))}
+                >
                   Now
                 </button>
-                <button type="button" style={btnGhost}
+                <button
+                  type="button"
+                  style={btnGhost}
                   onClick={() => {
                     const dt = new Date(); dt.setHours(dt.getHours() + 2);
                     setForm((f) => ({ ...f, ready_until: toLocalInputValue(dt) }));
-                  }}>
+                  }}
+                >
                   +2 hr
                 </button>
               </div>
@@ -263,20 +258,41 @@ export default function AddListing() {
           <div style={row2}>
             <label style={lbl}>
               <span>Donor name</span>
-              <input name="donor_name" value={form.donor_name} onChange={handleChange} placeholder="Full name" style={inp} required />
+              <input
+                name="donor_name"
+                value={form.donor_name}
+                onChange={handleChange}
+                placeholder="Full name"
+                style={inp}
+                required
+              />
             </label>
 
             <label style={lbl}>
               <span>Phone</span>
               <div style={{ display: "flex", gap: 8 }}>
-                <input name="donor_phone" value={form.donor_phone} onChange={handleChange} placeholder="+91 9XXXXXXXXX" style={{ ...inp, flex: 1 }} required />
+                <input
+                  name="donor_phone"
+                  value={form.donor_phone}
+                  onChange={handleChange}
+                  placeholder="+91 9XXXXXXXXX"
+                  style={{ ...inp, flex: 1 }}
+                  required
+                />
                 {/* Quick WhatsApp test */}
                 <a
-                  href={`https://wa.me/${waDigits(form.donor_phone)}?text=${encodeURIComponent(`Hi, regarding "${form.title}" on NutriBridge`)}`}
-                  target="_blank" rel="noopener noreferrer"
+                  href={`https://wa.me/${waDigits(form.donor_phone)}?text=${encodeURIComponent(
+                    `Hi, regarding "${form.title}" on NutriBridge`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    textDecoration: "none", padding: "8px 12px", borderRadius: 10,
-                    background: "#25D366", color: "#fff", fontWeight: 700
+                    textDecoration: "none",
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "#25D366",
+                    color: "#fff",
+                    fontWeight: 700,
                   }}
                 >
                   WhatsApp
@@ -287,12 +303,30 @@ export default function AddListing() {
 
           <label style={lbl}>
             <span>Email</span>
-            <input type="email" name="donor_email" value={form.donor_email} onChange={handleChange} placeholder="name@example.com" style={inp} />
+            <input
+              type="email"
+              name="donor_email"
+              value={form.donor_email}
+              onChange={handleChange}
+              placeholder="name@example.com"
+              style={inp}
+            />
           </label>
 
+          {/* Address removed → Donor Pincode added */}
           <label style={lbl}>
-            <span>Address</span>
-            <textarea name="donor_address" value={form.donor_address} onChange={handleChange} placeholder="Flat / Street, Area, City, State" rows={3} style={ta} />
+            <span>Donor pincode</span>
+            <input
+              name="donor_pincode"
+              value={form.donor_pincode}
+              onChange={handleChange}
+              placeholder="e.g., 110059"
+              style={inp}
+              inputMode="numeric"
+              maxLength={6}
+              required
+            />
+            <span style={{ fontSize: 12, color: "#a6b0bf" }}>6 digits (India)</span>
           </label>
         </section>
 
@@ -303,11 +337,19 @@ export default function AddListing() {
             style={btnGhost}
             onClick={() =>
               setForm({
-                title: "", description: "", food_type: "VEG", portions: "", pincode: "",
-                cooking_time: toLocalInputValue(new Date()),
+                title: "",
+                description: "",
+                food_type: "VEG",
+                portions: "",
+                pincode: "",
                 ready_until: toLocalInputValue(new Date()),
-                tags: "", allergens: "", hygiene_ack: false,
-                donor_name: "", donor_phone: "", donor_email: "", donor_address: "",
+                tags: "",
+                allergens: "",
+                hygiene_ack: false,
+                donor_name: "",
+                donor_phone: "",
+                donor_email: "",
+                donor_pincode: "",
               })
             }
           >
